@@ -402,65 +402,71 @@ with st.form("add_client_form"):
             st.session_state.not_found_counter += 1
             st.error("❌ Brak miejsca w tym przedziale.")
 
-# ---------------------- AUTO-FILL FULL DAY ----------------------
+# ---------------------- AUTO-FILL FULL DAY (BEZPIECZNY) ----------------------
 st.subheader("⚡ Automatyczne dociążenie wszystkich brygad")
 
-day_autofill = st.date_input("Dzień do wypełnienia (pełny dzień)", value=date.today(), key="autofill_day_full")
+day_autofill = st.date_input(
+    "Dzień do wypełnienia (pełny dzień)",
+    value=date.today(),
+    key="autofill_day_full"
+)
 
 if st.button("🚀 Wypełnij cały dzień do 100%"):
     added_total = 0
-    loop_guard = 0
     max_iterations = 5000  # zabezpieczenie przed nieskończoną pętlą
+    iteration = 0
+    slots_added_in_last_iteration = True
 
-    while loop_guard < max_iterations:
-        loop_guard += 1
-        # losujemy slot i przedział
-        auto_type = weighted_choice(st.session_state.slot_types) or "Standard"
-        auto_pref = random.choice(list(PREFERRED_SLOTS.keys()))
-        pref_start, pref_end = PREFERRED_SLOTS[auto_pref]
-        client_name = f"AutoKlient {st.session_state.client_counter}"
+    # pętla dopóki udało się dodać slot w ostatniej iteracji
+    while iteration < max_iterations and slots_added_in_last_iteration:
+        iteration += 1
+        slots_added_in_last_iteration = False
 
-        ok, info = schedule_client_immediately(
-            client_name, auto_type, day_autofill, pref_start, pref_end
-        )
-        if not ok:
-            # sprawdzamy czy wszystkie brygady faktycznie są pełne
-            fully_loaded = True
-            for brigade in st.session_state.schedules:
-                d_str = day_autofill.strftime("%Y-%m-%d")
-                slots = st.session_state.schedules[brigade].get(d_str, [])
-                wh_start, wh_end = st.session_state.working_hours[brigade]
-                daily_minutes = _wh_minutes(wh_start, wh_end)
-                used_minutes = sum(s["duration_min"] for s in slots)
-                if used_minutes < daily_minutes:
-                    fully_loaded = False
-                    break
-            if fully_loaded:
-                break  # wszystkie brygady pełne -> koniec
-            else:
-                continue  # spróbuj jeszcze raz (inny slot/typ)
-
-        # dodajemy meta-info
-        for b in st.session_state.schedules:
+        for b in st.session_state.brygady:
+            wh_start, wh_end = st.session_state.working_hours[b]
+            daily_minutes = _wh_minutes(wh_start, wh_end)
             d_str = day_autofill.strftime("%Y-%m-%d")
-            slots = st.session_state.schedules[b].get(d_str, [])
-            for s in slots:
-                if s["client"] == client_name and s["start"] == info["start"]:
-                    s["pref_range"] = auto_pref
+            slots = st.session_state.schedules.get(b, {}).get(d_str, [])
+            used_minutes = sum(s["duration_min"] for s in slots)
 
-        st.session_state.clients_added.append({
-            "client": client_name,
-            "slot_type": auto_type,
-            "pref_range": auto_pref
-        })
-        st.session_state.client_counter += 1
-        added_total += 1
+            # jeśli brygada pełna, pomiń
+            if used_minutes >= daily_minutes:
+                continue
+
+            # próbujemy wstawić slot
+            auto_type = weighted_choice(st.session_state.slot_types) or "Standard"
+            auto_pref_label = random.choice(list(PREFERRED_SLOTS.keys()))
+            pref_start, pref_end = PREFERRED_SLOTS[auto_pref_label]
+            client_name = f"AutoKlient {st.session_state.client_counter}"
+
+            ok, info = schedule_client_immediately(
+                client_name, auto_type, day_autofill, pref_start, pref_end
+            )
+
+            if ok:
+                # dodaj meta info
+                for s in st.session_state.schedules[b][d_str]:
+                    if s["client"] == client_name and s["start"] == info["start"]:
+                        s["pref_range"] = auto_pref_label
+
+                st.session_state.clients_added.append({
+                    "client": client_name,
+                    "slot_type": auto_type,
+                    "pref_range": auto_pref_label
+                })
+                st.session_state.client_counter += 1
+                added_total += 1
+                slots_added_in_last_iteration = True  # oznaczamy, że coś wstawiliśmy
 
     if added_total > 0:
-        st.success(f"✅ Dodano {added_total} klientów – dzień {day_autofill.strftime('%d-%m-%Y')} został wypełniony do 100% we wszystkich brygadach.")
+        st.success(
+            f"✅ Dodano {added_total} klientów – dzień {day_autofill.strftime('%d-%m-%Y')} został wypełniony do 100% we wszystkich brygadach."
+        )
+        # teraz bezpieczne odświeżenie po zakończeniu pętli
         st.experimental_rerun()
     else:
         st.info("ℹ️ Wszystkie brygady są już w pełni obciążone w tym dniu.")
+
 
 
 # ---------------------- Harmonogram (tabela) ----------------------
