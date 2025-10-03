@@ -427,12 +427,15 @@ if st.button("🚀 Wypełnij cały dzień do 100%"):
             wh_start, wh_end = st.session_state.working_hours[b]
             daily_minutes = _wh_minutes(wh_start, wh_end)
             d_str = day_autofill.strftime("%Y-%m-%d")
-            slots = st.session_state.schedules.get(b, {}).get(d_str, [])
-            used_minutes = sum(s["duration_min"] for s in slots)
 
-            # jeśli brygada pełna, pomijamy
+            # BEZPIECZNIE – upewniamy się, że istnieje słownik dla brygady i dnia
+            st.session_state.schedules.setdefault(b, {})
+            st.session_state.schedules[b].setdefault(d_str, [])
+            slots = st.session_state.schedules[b][d_str]
+
+            used_minutes = sum(s["duration_min"] for s in slots)
             if used_minutes >= daily_minutes:
-                continue
+                continue  # brygada pełna, pomiń
 
             # losujemy typ slotu i preferowany przedział
             auto_type = weighted_choice(st.session_state.slot_types) or "Standard"
@@ -441,7 +444,9 @@ if st.button("🚀 Wypełnij cały dzień do 100%"):
             client_name = f"AutoKlient {st.session_state.client_counter}"
 
             # próbujemy dodać slot
-            ok, info = schedule_client_immediately(client_name, auto_type, day_autofill, pref_start, pref_end)
+            ok, info = schedule_client_immediately(
+                client_name, auto_type, day_autofill, pref_start, pref_end
+            )
 
             if ok:
                 # oznaczenie pref_range
@@ -459,7 +464,7 @@ if st.button("🚀 Wypełnij cały dzień do 100%"):
                 added_total += 1
                 slots_added_in_last_iteration = True
 
-    # ustawiamy flagę w session_state zamiast bezpośredniego rerun
+    # ustawiamy flagę w session_state zamiast wywoływać rerun od razu
     st.session_state["autofill_done"] = added_total
 
 # Po renderze strony, jeśli autofill zakończone – wyświetlamy komunikaty i wykonujemy rerun
@@ -470,8 +475,6 @@ if st.session_state.get("autofill_done") is not None:
     else:
         st.info("ℹ️ Wszystkie brygady są już w pełni obciążone w tym dniu.")
     st.experimental_rerun()
-
-
 
 
 # ---------------------- Harmonogram (tabela) ----------------------
