@@ -477,7 +477,7 @@ if st.session_state.get("autofill_done"):
         st.info("ℹ️ Wszystkie brygady są już w pełni obciążone w tym dniu.")
 
     # BEZPIECZNE wywołanie rerun po zakończeniu renderu
-    st.experimental_rerun()
+    st.rerun()
 
 
 # ---------------------- Harmonogram (tabela) ----------------------
@@ -517,7 +517,7 @@ if not df.empty:
         cols[3].write(row["Brygada"])
         if cols[4].button("Usuń", key=f"del_{row['Brygada']}_{row['_start_iso']}"):
             delete_slot(row["Brygada"], row["Dzień"], row["_start_iso"])
-            st.experimental_rerun()
+            st.rerun()
 
 # ---------------------- GANTT ----------------------
 if not df.empty:
