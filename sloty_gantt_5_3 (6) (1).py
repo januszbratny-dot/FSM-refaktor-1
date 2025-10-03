@@ -405,19 +405,20 @@ with st.form("add_client_form"):
 # ---------------------- AUTO-FILL FULL DAY (BEZPIECZNY) ----------------------
 st.subheader("⚡ Automatyczne dociążenie wszystkich brygad")
 
+# wybór dnia do autofill
 day_autofill = st.date_input(
     "Dzień do wypełnienia (pełny dzień)",
     value=date.today(),
     key="autofill_day_full"
 )
 
+# przycisk uruchamiający autofill
 if st.button("🚀 Wypełnij cały dzień do 100%"):
     added_total = 0
-    max_iterations = 5000  # zabezpieczenie przed nieskończoną pętlą
+    max_iterations = 5000
     iteration = 0
     slots_added_in_last_iteration = True
 
-    # pętla dopóki udało się dodać slot w ostatniej iteracji
     while iteration < max_iterations and slots_added_in_last_iteration:
         iteration += 1
         slots_added_in_last_iteration = False
@@ -429,26 +430,26 @@ if st.button("🚀 Wypełnij cały dzień do 100%"):
             slots = st.session_state.schedules.get(b, {}).get(d_str, [])
             used_minutes = sum(s["duration_min"] for s in slots)
 
-            # jeśli brygada pełna, pomiń
+            # jeśli brygada pełna, pomijamy
             if used_minutes >= daily_minutes:
                 continue
 
-            # próbujemy wstawić slot
+            # losujemy typ slotu i preferowany przedział
             auto_type = weighted_choice(st.session_state.slot_types) or "Standard"
             auto_pref_label = random.choice(list(PREFERRED_SLOTS.keys()))
             pref_start, pref_end = PREFERRED_SLOTS[auto_pref_label]
             client_name = f"AutoKlient {st.session_state.client_counter}"
 
-            ok, info = schedule_client_immediately(
-                client_name, auto_type, day_autofill, pref_start, pref_end
-            )
+            # próbujemy dodać slot
+            ok, info = schedule_client_immediately(client_name, auto_type, day_autofill, pref_start, pref_end)
 
             if ok:
-                # dodaj meta info
+                # oznaczenie pref_range
                 for s in st.session_state.schedules[b][d_str]:
                     if s["client"] == client_name and s["start"] == info["start"]:
                         s["pref_range"] = auto_pref_label
 
+                # aktualizacja session_state
                 st.session_state.clients_added.append({
                     "client": client_name,
                     "slot_type": auto_type,
@@ -456,16 +457,20 @@ if st.button("🚀 Wypełnij cały dzień do 100%"):
                 })
                 st.session_state.client_counter += 1
                 added_total += 1
-                slots_added_in_last_iteration = True  # oznaczamy, że coś wstawiliśmy
+                slots_added_in_last_iteration = True
 
+    # ustawiamy flagę w session_state zamiast bezpośredniego rerun
+    st.session_state["autofill_done"] = added_total
+
+# Po renderze strony, jeśli autofill zakończone – wyświetlamy komunikaty i wykonujemy rerun
+if st.session_state.get("autofill_done") is not None:
+    added_total = st.session_state.pop("autofill_done")
     if added_total > 0:
-        st.success(
-            f"✅ Dodano {added_total} klientów – dzień {day_autofill.strftime('%d-%m-%Y')} został wypełniony do 100% we wszystkich brygadach."
-        )
-        # teraz bezpieczne odświeżenie po zakończeniu pętli
-        st.experimental_rerun()
+        st.success(f"✅ Dodano {added_total} klientów – dzień {day_autofill.strftime('%d-%m-%Y')} wypełniony do 100% we wszystkich brygadach.")
     else:
         st.info("ℹ️ Wszystkie brygady są już w pełni obciążone w tym dniu.")
+    st.experimental_rerun()
+
 
 
 
