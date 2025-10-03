@@ -463,19 +463,21 @@ if st.button("🚀 Wypełnij cały dzień do 100%"):
                 slots_added_in_last_iteration = True
 
     # ustawiamy flagę, która będzie przetworzona w kolejnym renderze
-    st.session_state["autofill_done"] = added_total
-    st.session_state["autofill_done_pending"] = True  # flaga do bezpiecznego rerun
+    st.session_state["autofill_done"] = True
+    st.session_state["added_total"] = added_total
 
-# w osobnym bloku, poza przyciskiem – wykonanie rerun dopiero po renderze
-if st.session_state.get("autofill_done_pending"):
-    added_total = st.session_state.pop("autofill_done", 0)
-    st.session_state.pop("autofill_done_pending", None)
+# ---------------------- BLOK OBSŁUGI RERUN (BEZPIECZNY) ----------------------
+if st.session_state.get("autofill_done"):
+    added_total = st.session_state.pop("added_total", 0)
+    st.session_state.pop("autofill_done", None)
+
     if added_total > 0:
         st.success(f"✅ Dodano {added_total} klientów – dzień {day_autofill.strftime('%d-%m-%Y')} wypełniony do 100% we wszystkich brygadach.")
     else:
         st.info("ℹ️ Wszystkie brygady są już w pełni obciążone w tym dniu.")
-    st.experimental_rerun()
 
+    # BEZPIECZNE wywołanie rerun po zakończeniu renderu
+    st.experimental_rerun()
 
 
 # ---------------------- Harmonogram (tabela) ----------------------
