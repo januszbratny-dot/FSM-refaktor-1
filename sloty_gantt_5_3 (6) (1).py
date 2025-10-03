@@ -419,6 +419,7 @@ if st.button("🚀 Wypełnij cały dzień do 100%"):
     iteration = 0
     slots_added_in_last_iteration = True
 
+    # główna pętla dodawania slotów dopóki coś się udało dodać
     while iteration < max_iterations and slots_added_in_last_iteration:
         iteration += 1
         slots_added_in_last_iteration = False
@@ -435,7 +436,7 @@ if st.button("🚀 Wypełnij cały dzień do 100%"):
 
             used_minutes = sum(s["duration_min"] for s in slots)
             if used_minutes >= daily_minutes:
-                continue  # brygada pełna, pomiń
+                continue  # brygada pełna, pomijamy
 
             # losujemy typ slotu i preferowany przedział
             auto_type = weighted_choice(st.session_state.slot_types) or "Standard"
@@ -444,12 +445,9 @@ if st.button("🚀 Wypełnij cały dzień do 100%"):
             client_name = f"AutoKlient {st.session_state.client_counter}"
 
             # próbujemy dodać slot
-            ok, info = schedule_client_immediately(
-                client_name, auto_type, day_autofill, pref_start, pref_end
-            )
-
+            ok, info = schedule_client_immediately(client_name, auto_type, day_autofill, pref_start, pref_end)
             if ok:
-                # oznaczenie pref_range
+                # oznaczenie pref_range w slotach
                 for s in st.session_state.schedules[b][d_str]:
                     if s["client"] == client_name and s["start"] == info["start"]:
                         s["pref_range"] = auto_pref_label
@@ -464,17 +462,20 @@ if st.button("🚀 Wypełnij cały dzień do 100%"):
                 added_total += 1
                 slots_added_in_last_iteration = True
 
-    # ustawiamy flagę w session_state zamiast wywoływać rerun od razu
+    # ustawiamy flagę, która będzie przetworzona w kolejnym renderze
     st.session_state["autofill_done"] = added_total
+    st.session_state["autofill_done_pending"] = True  # flaga do bezpiecznego rerun
 
-# Po renderze strony, jeśli autofill zakończone – wyświetlamy komunikaty i wykonujemy rerun
-if st.session_state.get("autofill_done") is not None:
-    added_total = st.session_state.pop("autofill_done")
+# w osobnym bloku, poza przyciskiem – wykonanie rerun dopiero po renderze
+if st.session_state.get("autofill_done_pending"):
+    added_total = st.session_state.pop("autofill_done", 0)
+    st.session_state.pop("autofill_done_pending", None)
     if added_total > 0:
         st.success(f"✅ Dodano {added_total} klientów – dzień {day_autofill.strftime('%d-%m-%Y')} wypełniony do 100% we wszystkich brygadach.")
     else:
         st.info("ℹ️ Wszystkie brygady są już w pełni obciążone w tym dniu.")
     st.experimental_rerun()
+
 
 
 # ---------------------- Harmonogram (tabela) ----------------------
